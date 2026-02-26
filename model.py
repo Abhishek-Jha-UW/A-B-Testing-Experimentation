@@ -49,37 +49,19 @@ def calculate_sample_size(baseline_rate, mde, alpha=0.05, power=0.80):
 # ---------------------------------------------------------
 def run_monte_carlo_simulation(baseline_rate, mde, n_samples, iterations=1000, alpha=0.05):
     """
-    Run Monte Carlo simulations to estimate Type I/II error rates.
-
-    Parameters
-    ----------
-    baseline_rate : float
-        Conversion rate of control group.
-    mde : float
-        True relative lift applied to treatment.
-    n_samples : int
-        Sample size per group.
-    iterations : int
-        Number of simulated experiments.
-    alpha : float
-        Significance threshold.
-
-    Returns
-    -------
-    pd.DataFrame
-        Simulation results with p-values, significance flags, and observed lifts.
+    Faster version: Uses the binomial distribution property to avoid 
+    massive memory allocation.
     """
     true_rate = baseline_rate * (1 + mde)
 
-    # Vectorized binomial sampling for speed
-    group_a = np.random.binomial(1, baseline_rate, (iterations, n_samples))
-    group_b = np.random.binomial(1, true_rate, (iterations, n_samples))
-
-    count_a = group_a.sum(axis=1)
-    count_b = group_b.sum(axis=1)
+    # Instead of (iterations, n_samples), we just generate the TOTAL SUMS
+    # This generates 1,000 totals directly.
+    count_a = np.random.binomial(n_samples, baseline_rate, iterations)
+    count_b = np.random.binomial(n_samples, true_rate, iterations)
 
     results = []
     for a, b in zip(count_a, count_b):
+        # We pass the sums directly to the z-test
         stat, p_value = proportions_ztest([a, b], [n_samples, n_samples])
         lift = (b / n_samples) - (a / n_samples)
 
@@ -90,7 +72,6 @@ def run_monte_carlo_simulation(baseline_rate, mde, n_samples, iterations=1000, a
         })
 
     return pd.DataFrame(results)
-
 
 # ---------------------------------------------------------
 # BUSINESS IMPACT CALCULATOR
