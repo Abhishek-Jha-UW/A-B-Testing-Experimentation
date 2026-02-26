@@ -99,3 +99,60 @@ def get_business_impact(baseline_conv, lift, annual_visitors, avg_order_value):
     current_revenue = annual_visitors * baseline_conv * avg_order_value
     new_revenue = annual_visitors * (baseline_conv + lift) * avg_order_value
     return new_revenue - current_revenue
+
+# ---------------------------------------------------------
+# INTERPRETATION & AUDITING
+# ---------------------------------------------------------
+
+def interpret_simulation(df, power_target):
+    """
+    Translates Monte Carlo results into plain English.
+    
+    Parameters
+    ----------
+    df : pd.DataFrame
+        The results from run_monte_carlo_simulation.
+    power_target : float
+        The user-defined statistical power (e.g., 0.80).
+    """
+    # Calculate how many simulations were significant (Green bars)
+    success_rate = df['significant'].mean()
+    
+    summary = (
+        f"In 1,000 simulated 'parallel universes' where your change was actually better, "
+        f"the test correctly identified the winner {success_rate:.1%} of the time."
+    )
+    
+    # Check if we met the "Target Power"
+    if success_rate < power_target:
+        advice = (
+            f" **Note:** This is slightly lower than your goal of {power_target:.0%}. "
+            "This means there is a higher risk of missing a winning idea due to random noise."
+        )
+    else:
+        advice = " **Great!** This meets your certainty goals, and your results should be highly reliable."
+        
+    return summary + advice
+
+def check_srm(observed_a, observed_b, expected_ratio=0.5):
+    """
+    Checks for Sample Ratio Mismatch (SRM).
+    If the p-value is extremely low (e.g., < 0.001), the split is 'unnatural.'
+    
+    This is used when you have ACTUAL data from a running test.
+    """
+    from scipy.stats import chisquare
+    
+    total = observed_a + observed_b
+    if total == 0:
+        return 1.0, False
+        
+    expected_a = total * expected_ratio
+    expected_b = total * (1 - expected_ratio)
+    
+    # Chi-square test compares the 'actual' split to the 'perfect' 50/50 split
+    stat, p_val = chisquare([observed_a, observed_b], f_obs=[expected_a, expected_b])
+    
+    # If p-value is tiny, the randomization is likely broken (SRM exists)
+    is_mismatch = p_val < 0.001
+    return p_val, is_mismatch
